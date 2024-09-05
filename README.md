@@ -54,3 +54,22 @@ apk add pulseaudio-dev libwebsockets-dev build-base cmake
 ```
 
 根据你的项目需求，添加或调整其他依赖项。如果你使用了其他库，请确保它们的开发包也已安装。
+
+
+
+### 5. 运行
+
+```shell
+gcc -o audio_ws main.c -lpulse -lpulse-simple -lwebsockets
+
+./audio_ws
+
+# 游览器打开index.html 注意里面的地址，修改为服务器地址
+```
+
+
+
+### 6. 注意
+
+- 开发环境为alpine 3.20
+- 代码由chatgpt 生成，还没测试是否有bug
