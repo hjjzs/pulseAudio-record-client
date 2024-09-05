@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket PCM Audio Player</title>
+</head>
+<body>
+<button id="audioButton" onclick="toggleAudio()">Start Audio</button>
+
+<script>
+    // var host = window.location.hostname;
+    // var port = window.location.port;
+    // var protocol = window.location.protocol === "https:" ? "wss" : "ws";
+    // var path = "/ws";
+    var socketUrl = "ws://172.129.0.113:8080";
+
+    var socket = null;
+    var player = null;
+    var audioEnabled = false;
+
+    class PCM {
+        constructor() {
+            this.init();
+        }
+
+        init() {
+            this.audioCtx = new (window.AudioContext || window.webkitAudioContext)({
+                sampleRate: 44100
+            });
+            this.gainNode = this.audioCtx.createGain();
+            this.gainNode.gain.value = 1;
+            this.gainNode.connect(this.audioCtx.destination);
+            this.startTime = this.audioCtx.currentTime;
+            this.buffer = [];
+        }
+
+        feed(data) {
+            let i16Array = new Int16Array(data);
+            let f32Array = Float32Array.from(i16Array, x => x / 32767);
+            this.buffer.push(...f32Array);
+
+            let audioBuffer = this.audioCtx.createBuffer(2, this.buffer.length / 2, 44100);
+            let leftChannel = audioBuffer.getChannelData(0);
+            let rightChannel = audioBuffer.getChannelData(1);
+
+            for (let i = 0; i < leftChannel.length; i++) {
+                leftChannel[i] = this.buffer[i * 2];
+                rightChannel[i] = this.buffer[i * 2 + 1];
+            }
+
+            let bufferSource = this.audioCtx.createBufferSource();
+            bufferSource.buffer = audioBuffer;
+            bufferSource.connect(this.gainNode);
+
+            let bufferDuration = audioBuffer.duration;
+            if (this.startTime < this.audioCtx.currentTime) {
+                this.startTime = this.audioCtx.currentTime;
+            }
+
+            bufferSource.start(this.startTime);
+            this.startTime += bufferDuration;
+
+            // 清空缓冲区
+            this.buffer = [];
+        }
+
+        destroy() {
+            if (this.audioCtx) {
+                this.audioCtx.close();
+                this.audioCtx = null;
+            }
+        }
+    }
+
+    function toggleAudio() {
+        if (audioEnabled) {
+            stopAudio();
+        } else {
+            startAudio();
+        }
+    }
+
+    function startAudio() {
+        player = new PCM();
+        socket = new WebSocket(socketUrl);
+
+        socket.binaryType = "arraybuffer";
+        socket.onopen = function() {
+            console.log("WebSocket connection established.");
+        };
+        socket.onmessage = function(event) {
+            player.feed(event.data);
+        };
+        socket.onclose = function() {
+            console.log("WebSocket connection closed.");
+            player.destroy();
+        };
+        audioEnabled = true;
+        document.getElementById("audioButton").innerText = "Stop Audio";
+    }
+
+    function stopAudio() {
+        if (socket) {
+            socket.close();
+            socket = null;
+        }
+        if (player) {
+            player.destroy();
+            player = null;
+        }
+        audioEnabled = false;
+        document.getElementById("audioButton").innerText = "Start Audio";
+    }
+</script>
+</body>
+</html>
